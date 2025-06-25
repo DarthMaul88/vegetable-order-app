@@ -294,4 +294,17 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     # Run the app. 'host=0.0.0.0' is important for it to be accessible in a container.
     app.run(host='0.0.0.0', port=port)
+```
 
+### What to Do Next
+
+1.  **Replace Your Code:** On your computer, open `backend/app.py`. Delete **everything** inside it.
+2.  **Paste the New Code:** Copy the entire code from the box above and paste it into the empty `app.py` file.
+3.  **Save the file.**
+4.  **Push the Fix to GitHub:** Open your terminal and run these commands from your main `vegetable-order-app` folder.
+    ```bash
+    git add backend/app.py
+    git commit -m "Fix corrupted app.py with clean version"
+    git push origin main
+    ```
+5.  **Monitor on Render:** The push will start a new deployment for `vegetable-order-backend`. Watch it in the "Events" tab. It should now succeed. Once it is "Live", your entire application should work correct
