@@ -1,62 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Healthy Basket - Vegetable Order</title>
-    <meta name="description" content="Order fresh vegetables online from Happy Basket, delivering high-quality produce at affordable prices.">
-    </head>
-<body>
-
-    <header>
-        <h1>Welcome to Healthy Basket</h1>
-        <p>Order fresh vegetables online with ease!</p>
-        <span class="admin-link" onclick="showAdminLogin()">Admin Panel</span>
-    </header>
-
-    <div id="orderNotification" class="order-notification"></div>
-
-    <div id="adminLoginModal" class="modal">
-        <div class="modal-content">
-            <h2>Admin Login</h2>
-            <input type="text" id="adminUsername" placeholder="Username" autocomplete="username">
-            <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password">
-            <div id="loginError" class="error-message" style="display: none;"></div>
-            <button onclick="validateAdminLogin()">Login</button>
-            <button class="cancel-btn" onclick="closeAdminLogin()">Cancel</button>
-        </div>
-    </div>
-
-    <div class="container" id="vegetableContainer">
-        </div>
-
-    <div class="form-container">
-        <h2>Customer Information</h2>
-        <div class="form-section">
-            <input type="text" id="customerName" placeholder="Your Name" required>
-            <input type="text" id="customerMobile" placeholder="Mobile Number (e.g., 09xxxxxxxxx)" required>
-            <input type="text" id="customerAddress" placeholder="Address to Deliver" required>
-        </div>
-
-        <div class="total-payment">
-            <p>Total Payment: ₱<span id="totalPrice">0.00</span></p>
-        </div>
-
-        <div class="form-section">
-            <button onclick="proceedToPayment()">Proceed to Payment</button>
-            <a href="#" class="button reset-btn" onclick="resetOrder(event)">Reset Order</a>
-        </div>
-    </div>
-
     <script>
         // ADDED: The URL of your live backend.
         const BACKEND_URL = "https://vegetable-order-backend.onrender.com";
 
         // This will now hold data fetched from the backend.
         let vegetableData = {};
-
-        // REMOVED: The hardcoded defaultVegetables object is no longer needed.
-        // The single source of truth is now your backend database.
 
         // --- Admin Login Modal Functions (Unchanged) ---
         const ADMIN_USERNAME = 'admin';
@@ -67,8 +14,6 @@
             const username = document.getElementById('adminUsername').value;
             const password = document.getElementById('adminPassword').value;
             const errorDiv = document.getElementById('loginError');
-            // IMPORTANT: This is insecure client-side validation.
-            // For a real application, you should have a proper login endpoint on your backend.
             if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
                 window.location.href = 'admin.html';
             } else {
@@ -94,7 +39,8 @@
             }, 3000);
         }
 
-        // CHANGED: This function now populates the page with data from the backend.
+        // UPDATED: This function now populates the page with data from the backend
+        // and uses the correct image path.
         function renderVegetables() {
             const container = document.getElementById('vegetableContainer');
             container.innerHTML = ''; // Clear previous content
@@ -113,8 +59,12 @@
                 vegItem.className = `item ${isOutOfStock ? 'out-of-stock' : ''}`;
                 vegItem.id = `${vegId}Item`;
 
+                // --- THIS LINE IS THE IMPORTANT FIX ---
+                // The image source now points to the "images" folder.
+                const imagePath = `images/${vegId}.jpg`;
+
                 vegItem.innerHTML = `
-                    <img src="${vegId}.jpg" alt="${veg.name}" onerror="this.onerror=null;this.src='${placeholderImg}';">
+                    <img src="${imagePath}" alt="${veg.name}" onerror="this.onerror=null;this.src='${placeholderImg}';">
                     <h3>${veg.name}</h3>
                     <p>₱${veg.price} per kilo</p>
                     <p>Stock: ${veg.stock} kg</p>
@@ -179,7 +129,7 @@
             }
         }
 
-        // CHANGED: This function now sends the order to your backend API.
+        // This function now sends the order to your backend API.
         async function proceedToPayment() {
             const customerName = document.getElementById('customerName').value.trim();
             const customerMobile = document.getElementById('customerMobile').value.trim();
@@ -258,7 +208,7 @@
             }
         }
 
-        // ADDED: Main function to initialize the page on load.
+        // Main function to initialize the page on load.
         async function initializePage() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/vegetables`);
@@ -282,13 +232,28 @@
             }
         }
         
-        // REMOVED: The old initializeData and setInterval functions.
-        
         // --- Page Load ---
         window.onload = function() {
             initializePage();
         };
     </script>
+```
 
-</body>
-</html>
+#### Step 3: Push Everything to GitHub
+
+Finally, we need to commit both the new `images` folder and your updated `index.html` file to GitHub.
+
+1.  Open your terminal in the main `vegetable-order-app` folder.
+2.  Run these commands:
+    ```bash
+    # Add all new and changed files
+    git add .
+
+    # Commit them with a clear message
+    git commit -m "Add vegetable images and update paths"
+
+    # Push to GitHub
+    git push origin main
+    ```
+
+This will trigger a new deployment for your frontend service on Render. Once it is "Live", your website should load with the correct UI, images, and features. Congratulatio
