@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - Healthy Basket</title>
+    </head>
+<body>
+    <header>
+        <h1>Payment & Order Confirmation</h1>
+    </header>
+
+    <div class="container">
+        <div class="order-summary">
+            <h2>Order Summary</h2>
+            <div id="customerDetails">
+                <p><strong>Name:</strong> <span id="customerName"></span></p>
+                <p><strong>Mobile:</strong> <span id="customerMobile"></span></p>
+                <p><strong>Address:</strong> <span id="customerAddress"></span></p>
+            </div>
+            <div id="orderItemsList">
+                </div>
+            <div class="total-section">
+                <p><strong>Total Amount:</strong> ₱<span id="totalAmount">0.00</span></p>
+            </div>
+        </div>
+
+        <div class="payment-section">
+            <h2>Payment Instructions</h2>
+            <p>Please prepare <strong>₱<span id="paymentAmount">0.00</span></strong> for Cash on Delivery (COD).</p>
+            <p>Our rider will contact you upon arrival. Thank you for your order!</p>
+            <button onclick="confirmOrder()">I Understand, Confirm My Order</button>
+        </div>
+
+        <div id="successMessage" style="display:none;">
+            <h2>Thank You!</h2>
+            <p>Your order has been confirmed and is now being processed.</p>
+            <p>You will receive a notification once your order is out for delivery.</p>
+            <button onclick="goBackToOrder()">Go Back to Order Page</button>
+        </div>
+    </div>
+
+    <script>
+        // ADDED: The URL of your live backend.
+        const BACKEND_URL = "https://vegetable-order-backend.onrender.com";
+        let currentOrderId = '';
+
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // CHANGED: This function now fetches order details from the backend.
+        async function loadOrderData() {
+            currentOrderId = getUrlParameter('orderId');
+            if (!currentOrderId) {
+                document.body.innerHTML = '<h1>Error: No Order ID provided.</h1>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders/${currentOrderId}`);
+                if (!response.ok) {
+                    throw new Error('Could not find your order. Please go back and try again.');
+                }
+                const order = await response.json();
+
+                document.getElementById('customerName').textContent = order.customer_name;
+                document.getElementById('customerMobile').textContent = order.customer_mobile;
+                document.getElementById('customerAddress').textContent = order.customer_address;
+
+                const totalAmount = order.total_amount.toFixed(2);
+                document.getElementById('totalAmount').textContent = totalAmount;
+                document.getElementById('paymentAmount').textContent = totalAmount;
+
+                const orderItemsList = document.getElementById('orderItemsList');
+                orderItemsList.innerHTML = '';
+                // Items are stored as a JSON string, so we parse it.
+                const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+
+                items.forEach(item => {
+                    const orderItem = document.createElement('div');
+                    orderItem.className = 'order-item';
+                    orderItem.innerHTML = `
+                        <div class="item-details">
+                            <div class="item-name">${item.name}</div>
+                            <div class="item-specs">${item.weight} × ${item.quantity}</div>
+                        </div>
+                        <div class="item-price">₱${item.total_price.toFixed(2)}</div>
+                    `;
+                    orderItemsList.appendChild(orderItem);
+                });
+
+            } catch (error) {
+                console.error('Error loading order data:', error);
+                alert(error.message);
+            }
+        }
+
+        // CHANGED: This function now updates the order status via the API.
+        async function confirmOrder() {
+            try {
+                // This call tells the backend that the user has seen the payment instructions.
+                const response = await fetch(`${BACKEND_URL}/api/orders/${currentOrderId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        status: 'Awaiting Payment Proof',
+                        payment_status: 'Pending Confirmation' 
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Could not confirm order on the server.');
+                }
+                
+                // Show the success message and hide the payment section.
+                document.querySelector('.payment-section').style.display = 'none';
+                document.getElementById('successMessage').style.display = 'block';
+                document.getElementById('successMessage').scrollIntoView({ behavior: 'smooth' });
+
+            } catch (error) {
+                console.error('Error confirming order:', error);
+                alert(`An error occurred: ${error.message}`);
+            }
+        }
+
+        // UPDATED: The link now points to index.html
+        function goBackToOrder() {
+            window.location.href = 'index.html';
+        }
+
+        window.onload = function() {
+            loadOrderData();
+        };
+    </script>
+</body>
+</html>

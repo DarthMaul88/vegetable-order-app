@@ -1,0 +1,5 @@
+Flask==2.3.3
+Flask-Cors==3.0.10
+gunicorn==20.1.0 # For production server, Render needs this
+psycopg2-binary==2.9.9 # For connecting to PostgreSQL (Supabase)
+python-dotenv==1.0.0   # For loading environment variables locally

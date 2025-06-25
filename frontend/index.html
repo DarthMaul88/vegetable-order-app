@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthy Basket - Vegetable Order</title>
+    <meta name="description" content="Order fresh vegetables online from Happy Basket, delivering high-quality produce at affordable prices.">
+    </head>
+<body>
+
+    <header>
+        <h1>Welcome to Healthy Basket</h1>
+        <p>Order fresh vegetables online with ease!</p>
+        <span class="admin-link" onclick="showAdminLogin()">Admin Panel</span>
+    </header>
+
+    <div id="orderNotification" class="order-notification"></div>
+
+    <div id="adminLoginModal" class="modal">
+        <div class="modal-content">
+            <h2>Admin Login</h2>
+            <input type="text" id="adminUsername" placeholder="Username" autocomplete="username">
+            <input type="password" id="adminPassword" placeholder="Password" autocomplete="current-password">
+            <div id="loginError" class="error-message" style="display: none;"></div>
+            <button onclick="validateAdminLogin()">Login</button>
+            <button class="cancel-btn" onclick="closeAdminLogin()">Cancel</button>
+        </div>
+    </div>
+
+    <div class="container" id="vegetableContainer">
+        </div>
+
+    <div class="form-container">
+        <h2>Customer Information</h2>
+        <div class="form-section">
+            <input type="text" id="customerName" placeholder="Your Name" required>
+            <input type="text" id="customerMobile" placeholder="Mobile Number (e.g., 09xxxxxxxxx)" required>
+            <input type="text" id="customerAddress" placeholder="Address to Deliver" required>
+        </div>
+
+        <div class="total-payment">
+            <p>Total Payment: ₱<span id="totalPrice">0.00</span></p>
+        </div>
+
+        <div class="form-section">
+            <button onclick="proceedToPayment()">Proceed to Payment</button>
+            <a href="#" class="button reset-btn" onclick="resetOrder(event)">Reset Order</a>
+        </div>
+    </div>
+
+    <script>
+        // ADDED: The URL of your live backend.
+        const BACKEND_URL = "https://vegetable-order-backend.onrender.com";
+
+        // This will now hold data fetched from the backend.
+        let vegetableData = {};
+
+        // REMOVED: The hardcoded defaultVegetables object is no longer needed.
+        // The single source of truth is now your backend database.
+
+        // --- Admin Login Modal Functions (Unchanged) ---
+        const ADMIN_USERNAME = 'admin';
+        const ADMIN_PASSWORD = 'HappyBasket@@88';
+        function showAdminLogin() { document.getElementById('adminLoginModal').style.display = 'block'; }
+        function closeAdminLogin() { document.getElementById('adminLoginModal').style.display = 'none'; }
+        function validateAdminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            // IMPORTANT: This is insecure client-side validation.
+            // For a real application, you should have a proper login endpoint on your backend.
+            if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+                window.location.href = 'admin.html';
+            } else {
+                errorDiv.textContent = 'Invalid username or password!';
+                errorDiv.style.display = 'block';
+            }
+        }
+        window.onclick = function(event) {
+            if (event.target === document.getElementById('adminLoginModal')) {
+                closeAdminLogin();
+            }
+        }
+        // --- End of Admin Login Functions ---
+
+
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('orderNotification');
+            notification.textContent = message;
+            notification.style.backgroundColor = isError ? '#dc3545' : '#28a745';
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // CHANGED: This function now populates the page with data from the backend.
+        function renderVegetables() {
+            const container = document.getElementById('vegetableContainer');
+            container.innerHTML = ''; // Clear previous content
+            const placeholderImg = 'https://via.placeholder.com/250x150.png?text=No+Image';
+
+            if (Object.keys(vegetableData).length === 0) {
+                container.innerHTML = '<p>No vegetables are available at the moment. Please check back later.</p>';
+                return;
+            }
+
+            Object.keys(vegetableData).forEach(vegId => {
+                const veg = vegetableData[vegId];
+                const isOutOfStock = !veg.available || veg.stock <= 0;
+
+                const vegItem = document.createElement('div');
+                vegItem.className = `item ${isOutOfStock ? 'out-of-stock' : ''}`;
+                vegItem.id = `${vegId}Item`;
+
+                vegItem.innerHTML = `
+                    <img src="${vegId}.jpg" alt="${veg.name}" onerror="this.onerror=null;this.src='${placeholderImg}';">
+                    <h3>${veg.name}</h3>
+                    <p>₱${veg.price} per kilo</p>
+                    <p>Stock: ${veg.stock} kg</p>
+                    ${isOutOfStock ? '<div class="not-available">NOT AVAILABLE</div>' : ''}
+                    <div class="quantity-selector" onchange="updateItemPrice('${vegId}')" ${isOutOfStock ? 'style="pointer-events: none; opacity: 0.5;"' : ''}>
+                        <input type="radio" id="${vegId}_0.25" name="${vegId}" value="0.25" ${isOutOfStock ? 'disabled' : ''}> <label for="${vegId}_0.25">1/4kg</label>
+                        <input type="radio" id="${vegId}_0.5" name="${vegId}" value="0.5" ${isOutOfStock ? 'disabled' : ''}> <label for="${vegId}_0.5">1/2kg</label>
+                        <input type="radio" id="${vegId}_0.75" name="${vegId}" value="0.75" ${isOutOfStock ? 'disabled' : ''}> <label for="${vegId}_0.75">3/4kg</label>
+                        <input type="radio" id="${vegId}_1" name="${vegId}" value="1" ${isOutOfStock ? 'disabled' : ''}> <label for="${vegId}_1">1kg</label>
+                    </div>
+                    <input class="quantity-input" type="number" id="${vegId}Quantity" value="0" min="0" oninput="updateItemPrice('${vegId}')" ${isOutOfStock ? 'disabled' : ''}>
+                    <p class="price">Subtotal: ₱<span id="${vegId}Price">0.00</span></p>
+                `;
+                container.appendChild(vegItem);
+            });
+        }
+
+        // Functions to calculate prices (no changes needed)
+        function updateItemPrice(vegId) {
+            const veg = vegetableData[vegId];
+            const selectedWeightEl = document.querySelector(`input[name="${vegId}"]:checked`);
+            const quantityEl = document.getElementById(`${vegId}Quantity`);
+            let quantity = parseInt(quantityEl.value) || 0;
+
+            if (!selectedWeightEl) {
+                document.getElementById(`${vegId}Price`).innerText = '0.00';
+                updateTotalPrice();
+                return;
+            }
+
+            const weight = parseFloat(selectedWeightEl.value);
+            const totalWeightOrdered = quantity * weight;
+
+            if (totalWeightOrdered > veg.stock) {
+                showNotification(`Only ${veg.stock}kg of ${veg.name} available. Please adjust your order.`, true);
+                quantity = Math.floor(veg.stock / weight);
+                quantityEl.value = quantity;
+            }
+
+            const subtotal = veg.price * weight * quantity;
+            document.getElementById(`${vegId}Price`).innerText = subtotal.toFixed(2);
+            updateTotalPrice();
+        }
+
+        function updateTotalPrice() {
+            let totalAmount = 0;
+            const priceElements = document.querySelectorAll('.price span');
+            priceElements.forEach(el => totalAmount += parseFloat(el.innerText));
+            document.getElementById('totalPrice').innerText = totalAmount.toFixed(2);
+        }
+
+        function resetOrder(event) {
+            event.preventDefault();
+            if (confirm('Are you sure you want to clear your entire order?')) {
+                document.querySelectorAll('.quantity-input').forEach(input => input.value = 0);
+                document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+                document.getElementById('customerName').value = '';
+                document.getElementById('customerMobile').value = '';
+                document.getElementById('customerAddress').value = '';
+                updateTotalPrice();
+                showNotification('Order has been cleared.');
+            }
+        }
+
+        // CHANGED: This function now sends the order to your backend API.
+        async function proceedToPayment() {
+            const customerName = document.getElementById('customerName').value.trim();
+            const customerMobile = document.getElementById('customerMobile').value.trim();
+            const customerAddress = document.getElementById('customerAddress').value.trim();
+
+            if (!customerName || !customerMobile || !customerAddress) {
+                alert("Please fill in all customer information!");
+                return;
+            }
+
+            const mobileRegex = /^(09|\+639)\d{9}$/;
+            if (!mobileRegex.test(customerMobile)) {
+                 alert("Please enter a valid Philippine mobile number (e.g., 09171234567).");
+                 return;
+            }
+
+            const orderItems = [];
+            let totalAmount = 0;
+            Object.keys(vegetableData).forEach(vegId => {
+                const veg = vegetableData[vegId];
+                const selectedWeightEl = document.querySelector(`input[name="${vegId}"]:checked`);
+                const quantity = parseInt(document.getElementById(`${vegId}Quantity`).value) || 0;
+
+                if (selectedWeightEl && quantity > 0) {
+                    const price = parseFloat(document.getElementById(`${vegId}Price`).innerText);
+                    orderItems.push({
+                        id: vegId,
+                        name: veg.name,
+                        weight: selectedWeightEl.value + 'kg',
+                        quantity: quantity,
+                        price_per_kg: veg.price, // Match backend model
+                        total_price: price      // Match backend model
+                    });
+                    totalAmount += price;
+                }
+            });
+
+            if (orderItems.length === 0) {
+                alert("Your cart is empty. Please select some items before proceeding.");
+                return;
+            }
+
+            const orderPayload = {
+                customer_name: customerName,
+                customer_mobile: customerMobile,
+                customer_address: customerAddress,
+                items: orderItems,
+                total_amount: totalAmount,
+                status: 'Awaiting Payment', // Initial status
+                payment_status: 'Unpaid'
+            };
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderPayload),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to place order.');
+                }
+
+                const result = await response.json();
+                const orderId = result.order_id;
+
+                // Redirect to the payment page with only the new Order ID.
+                window.location.href = `payment.html?orderId=${orderId}`;
+
+            } catch (error) {
+                console.error('Error placing order:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // ADDED: Main function to initialize the page on load.
+        async function initializePage() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/vegetables`);
+                if (!response.ok) {
+                    throw new Error('Could not fetch vegetable data from the server.');
+                }
+                const vegetables = await response.json();
+                
+                // Convert the list from the backend into the key-value format the frontend uses.
+                vegetableData = vegetables.reduce((acc, veg) => {
+                    acc[veg.id] = veg;
+                    return acc;
+                }, {});
+
+                renderVegetables();
+                updateTotalPrice();
+            } catch (error) {
+                console.error('Failed to initialize page:', error);
+                document.getElementById('vegetableContainer').innerHTML = 
+                    `<p style="color: red; text-align: center;">Error loading products: ${error.message}</p>`;
+            }
+        }
+        
+        // REMOVED: The old initializeData and setInterval functions.
+        
+        // --- Page Load ---
+        window.onload = function() {
+            initializePage();
+        };
+    </script>
+
+</body>
+</html>

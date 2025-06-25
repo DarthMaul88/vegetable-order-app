@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Healthy Basket</title>
+    </head>
+<body>
+
+    <header>
+        <h1>Admin Panel</h1>
+        <a href="index.html" class="back-link">← Back to Order Page</a>
+    </header>
+
+    <div class="container">
+        <div class="admin-section">
+            <h2>Add New Vegetable</h2>
+            <form id="addVegetableForm" onsubmit="addVegetable(event)">
+                <input type="text" id="vegId" placeholder="Vegetable ID (e.g., 'onion')" required>
+                <input type="text" id="vegName" placeholder="Vegetable Name (e.g., 'Onion')" required>
+                <input type="number" id="vegPrice" placeholder="Price per kg" required>
+                <input type="number" id="vegStock" placeholder="Stock in kg" required>
+                <select id="vegAvailable">
+                    <option value="true">Available</option>
+                    <option value="false">Unavailable</option>
+                </select>
+                <button type="submit" class="btn">Add Vegetable</button>
+            </form>
+            <div id="addAlert" class="alert" style="display:none;"></div>
+        </div>
+
+        <div class="admin-section">
+            <h2>Inventory Management</h2>
+            <div id="updateAlert" class="alert" style="display:none;"></div>
+            <div class="stats-container">
+                <div>Total Varieties: <span id="totalVegetables">0</span></div>
+                <div>Available Varieties: <span id="availableVegetables">0</span></div>
+                <div>Total Stock (kg): <span id="totalStock">0</span></div>
+                <div>Average Price: ₱<span id="avgPrice">0</span></div>
+            </div>
+            <div id="vegetableGrid" class="grid-container">
+                </div>
+        </div>
+
+        <div class="admin-section">
+            <h2>Order Management</h2>
+            <button class="btn" onclick="loadOrders()">Refresh Orders</button>
+            <div id="orderGrid" class="grid-container">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // ADDED: The URL of your live backend.
+        const BACKEND_URL = "https://vegetable-order-backend.onrender.com";
+
+        // This object will hold the inventory data fetched from the backend.
+        let vegetableData = {};
+
+        // REMOVED: The defaultVegetables object is no longer needed.
+
+        function showAlert(message, type = 'success', section = 'update') {
+            const alertElement = document.getElementById(section === 'add' ? 'addAlert' : 'updateAlert');
+            alertElement.className = `alert alert-${type}`;
+            alertElement.textContent = message;
+            alertElement.style.display = 'block';
+            setTimeout(() => {
+                alertElement.style.display = 'none';
+            }, 3000);
+        }
+
+        // --- Inventory Management Functions (Now use API calls) ---
+
+        // CHANGED: Adds a new vegetable by sending data to the backend.
+        async function addVegetable(event) {
+            event.preventDefault();
+            const vegId = document.getElementById('vegId').value.toLowerCase().replace(/\s+/g, '');
+            const vegName = document.getElementById('vegName').value;
+            const vegPrice = parseInt(document.getElementById('vegPrice').value);
+            const vegStock = parseInt(document.getElementById('vegStock').value);
+            const vegAvailable = document.getElementById('vegAvailable').value === 'true';
+
+            if (!vegId || !vegName) {
+                showAlert('Vegetable ID and Name are required.', 'error', 'add');
+                return;
+            }
+
+            const newVegetable = {
+                id: vegId,
+                name: vegName,
+                price: vegPrice,
+                stock: vegStock,
+                available: vegAvailable
+            };
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/vegetables`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newVegetable)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to add vegetable.');
+                }
+
+                showAlert(`${vegName} has been added successfully!`, 'success', 'add');
+                event.target.reset();
+                initializeData(); // Refresh all data from the backend
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error', 'add');
+            }
+        }
+
+        // CHANGED: Renders the vegetable management grid.
+        function renderVegetableGrid() {
+            const grid = document.getElementById('vegetableGrid');
+            grid.innerHTML = ''; // Clear existing grid
+            Object.keys(vegetableData).sort().forEach(vegId => {
+                const veg = vegetableData[vegId];
+                const card = document.createElement('div');
+                card.className = `vegetable-card ${!veg.available ? 'unavailable' : ''}`;
+                card.innerHTML = `
+                    <div class="vegetable-name">${veg.name}</div>
+                    <div class="vegetable-details">
+                        <p><strong>ID:</strong> ${vegId}</p>
+                        <p><strong>Price:</strong> ₱<input type="number" class="inline-edit" value="${veg.price}" id="price-${vegId}"> per kg</p>
+                        <p><strong>Stock:</strong> <input type="number" class="inline-edit" value="${veg.stock}" id="stock-${vegId}"> kg</p>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button class="btn" onclick="updateVegetable('${vegId}')">Update</button>
+                        <button class="btn ${veg.available ? 'btn-warning' : ''}" onclick="toggleAvailability('${vegId}')">${veg.available ? 'Mark Unavailable' : 'Mark Available'}</button>
+                        <button class="btn btn-danger" onclick="removeVegetable('${vegId}')">Remove</button>
+                    </div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        // CHANGED: Updates a vegetable's price and stock via API.
+        async function updateVegetable(vegId) {
+            const newPrice = parseInt(document.getElementById(`price-${vegId}`).value);
+            const newStock = parseInt(document.getElementById(`stock-${vegId}`).value);
+
+            if (isNaN(newPrice) || isNaN(newStock) || newPrice < 0 || newStock < 0) {
+                showAlert('Invalid price or stock value.', 'error', 'update');
+                return;
+            }
+
+            const updatedData = { ...vegetableData[vegId], price: newPrice, stock: newStock };
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/vegetables/${vegId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+                if (!response.ok) throw new Error('Failed to update.');
+
+                // Update local data and stats without a full refresh
+                vegetableData[vegId].price = newPrice;
+                vegetableData[vegId].stock = newStock;
+                showAlert(`${vegetableData[vegId].name} updated!`, 'success', 'update');
+                updateStats();
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error', 'update');
+            }
+        }
+
+        // CHANGED: Toggles availability via API.
+        async function toggleAvailability(vegId) {
+            const newAvailability = !vegetableData[vegId].available;
+            const updatedData = { ...vegetableData[vegId], available: newAvailability };
+
+            try {
+                 const response = await fetch(`${BACKEND_URL}/api/vegetables/${vegId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+                if (!response.ok) throw new Error('Failed to update status.');
+
+                // On success, update UI immediately
+                vegetableData[vegId].available = newAvailability;
+                renderVegetableGrid(); // Re-render the grid to update button text/style
+                updateStats();
+                showAlert(`${vegetableData[vegId].name} status updated.`, 'success', 'update');
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error', 'update');
+            }
+        }
+
+        // CHANGED: Removes a vegetable via API.
+        async function removeVegetable(vegId) {
+            if (confirm(`Are you sure you want to remove ${vegetableData[vegId].name}?`)) {
+                 try {
+                    const response = await fetch(`${BACKEND_URL}/api/vegetables/${vegId}`, {
+                        method: 'DELETE'
+                    });
+                    if (!response.ok) throw new Error('Failed to remove vegetable.');
+
+                    showAlert(`${vegetableData[vegId].name} removed.`, 'success', 'update');
+                    initializeData(); // Full refresh after deletion
+                } catch (error) {
+                    showAlert(`Error: ${error.message}`, 'error', 'update');
+                }
+            }
+        }
+
+        // CHANGED: Stats are now calculated from data fetched from the backend.
+        function updateStats() {
+            const vegetables = Object.values(vegetableData);
+            const total = vegetables.length;
+            const available = vegetables.filter(v => v.available && v.stock > 0).length;
+            const totalStock = vegetables.reduce((sum, v) => sum + (v.stock || 0), 0);
+            const avgPrice = total > 0 ? Math.round(vegetables.reduce((s, v) => s + (v.price || 0), 0) / total) : 0;
+            
+            document.getElementById('totalVegetables').textContent = total;
+            document.getElementById('availableVegetables').textContent = available;
+            document.getElementById('totalStock').textContent = totalStock;
+            document.getElementById('avgPrice').textContent = avgPrice;
+        }
+
+        // ===== Order Management Functions (Now use API calls) =====
+
+        // CHANGED: Loads orders from the backend API.
+        async function loadOrders() {
+            const grid = document.getElementById('orderGrid');
+            grid.innerHTML = 'Loading orders...';
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders`);
+                if (!response.ok) throw new Error('Failed to fetch orders.');
+
+                const orders = await response.json();
+                if (orders.length === 0) {
+                    grid.innerHTML = '<p>No orders found.</p>';
+                    return;
+                }
+
+                // The backend should already sort by timestamp, but we can sort again just in case.
+                orders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                grid.innerHTML = '';
+                orders.forEach(order => {
+                    const card = document.createElement('div');
+                    card.className = 'vegetable-card order-card';
+                    // Items are now a JSON string in the DB, so we need to parse it
+                    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+                    const itemsHtml = items.map(item => `<li>${item.name} (${item.weight} x ${item.quantity}) - ₱${item.total_price.toFixed(2)}</li>`).join('');
+
+                    card.innerHTML = `
+                        <div class="vegetable-name">Order ID: ${order.id}</div>
+                        <div class="vegetable-details">
+                            <p><strong>Date:</strong> ${new Date(order.timestamp).toLocaleString()}</p>
+                            <p><strong>Customer:</strong> ${order.customer_name} (${order.customer_mobile})</p>
+                            <p><strong>Address:</strong> ${order.customer_address}</p>
+                            <p><strong>Order Status:</strong> <span class="status-badge">${order.status}</span></p>
+                            <p><strong>Payment Status:</strong> <span class="status-badge">${order.payment_status}</span></p>
+                            <p><strong>Total:</strong> ₱${order.total_amount.toFixed(2)}</p>
+                            <p><strong>Items:</strong></p>
+                            <ul>${itemsHtml}</ul>
+                        </div>
+                        <div class="order-actions">
+                            <p><strong>Actions:</strong></p>
+                            <select onchange="updateOrderStatus('${order.id}', this.value)">
+                                <option value="" disabled selected>Change Status...</option>
+                                <optgroup label="Payment">
+                                    <option value="Paid">Mark as Paid</option>
+                                    <option value="Unpaid">Mark as Unpaid</option>
+                                </optgroup>
+                                <optgroup label="Order">
+                                     <option value="Processing">Processing</option>
+                                     <option value="Out for Delivery">Out for Delivery</option>
+                                     <option value="Completed">Completed</option>
+                                     <option value="Cancelled">Cancelled</option>
+                                </optgroup>
+                            </select>
+                        </div>`;
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                grid.innerHTML = `<p style="color:red;">An error occurred while loading orders: ${error.message}</p>`;
+            }
+        }
+
+        // CHANGED: Updates order status via the backend API.
+        async function updateOrderStatus(orderId, newStatus) {
+            if (!newStatus) return;
+
+            let payload = {};
+            if (['Paid', 'Unpaid'].includes(newStatus)) {
+                payload.payment_status = newStatus;
+            } else {
+                payload.status = newStatus;
+            }
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/orders/${orderId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to update order.');
+                }
+
+                showAlert(`Order ${orderId} has been updated!`, 'success', 'update');
+                loadOrders(); // Refresh the order list
+            } catch (error) {
+                showAlert(`Failed to update order ${orderId}: ${error.message}`, 'error', 'update');
+            }
+        }
+        
+        // ADDED: Main function to fetch all initial data from the backend.
+        async function initializeData() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/vegetables`);
+                if (!response.ok) throw new Error('Could not fetch vegetable data.');
+                const vegetables = await response.json();
+
+                // Convert list to the key-value format the frontend uses
+                vegetableData = vegetables.reduce((acc, veg) => {
+                    acc[veg.id] = veg;
+                    return acc;
+                }, {});
+
+                renderVegetableGrid();
+                updateStats();
+            } catch (error) {
+                console.error('Failed to initialize inventory:', error);
+                document.getElementById('vegetableGrid').innerHTML = `<p style="color:red;">Error loading inventory: ${error.message}</p>`;
+            }
+        }
+
+        // --- Page Load ---
+        window.onload = function() {
+            initializeData();
+            loadOrders();
+            // REMOVED: The setInterval is removed. Use the "Refresh Orders" button for manual updates.
+        };
+    </script>
+</body>
+</html>
